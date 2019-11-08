@@ -1,0 +1,12 @@
+name: custos
+title: custos
+username:
+account: andreferrari
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 1445575
+bundleId: 2574846
+url: https://andreferrari.shinyapps.io/custos/
+when: 1573243848.78107
+asMultiple: FALSE
+asStatic: FALSE
