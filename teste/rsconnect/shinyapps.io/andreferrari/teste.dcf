@@ -1,0 +1,13 @@
+name: teste
+title: teste
+username:
+account: andreferrari
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 1633441
+bundleId: 2712677
+url: https://andreferrari.shinyapps.io/teste/
+when: 1578425647.45172
+asMultiple: FALSE
+asStatic: FALSE
+ignoredFiles: app.R|tg1.xlsx

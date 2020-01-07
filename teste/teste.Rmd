@@ -1,0 +1,196 @@
+---
+title: "Tesouro Gerencial"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: rows
+    vertical_layout: fill
+    social: ["twitter", "facebook", "menu"]
+    runtime: shiny
+    
+---
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+library(dplyr)
+library(readxl)
+library(ggplot2)
+library(stringr)
+library(plotly)
+library(DT)
+library(flexdashboard)
+library(knitr)
+library(shiny)
+
+options(scipen=999)
+options(digits = 2)
+
+```
+
+
+
+```{r}
+tg <- read_excel ("tg.xlsx")
+
+colnames(tg)<- c("fase","fase_cod", "gnd_cod","gnd" , "ano_lan", "ano_emp", "org_uo_cod", "org_uo", "org_exec_cod", "org_exec", "saldo" )
+
+tg<- tg%>% filter (ano_emp != "'-7" & org_uo_cod != "'-7" & ano_emp != "'-9")
+
+tg$ano_lan<- as.numeric(tg$ano_lan)
+tg$ano_emp<- as.numeric(tg$ano_emp)
+
+tg<- tg%>%
+ mutate(fase = case_when(
+ fase == "DESPESAS EMPENHADAS (CONTROLE EMPENHO)" ~ "empenhado",
+ fase == "DESPESAS LIQUIDADAS (CONTROLE EMPENHO)" ~ "liquidado",
+ fase == "DESPESAS PAGAS (CONTROLE EMPENHO)" ~ "pago",
+ fase == "RESTOS A PAGAR PAGOS (PROC E N PROC)" ~ "RP pago"
+ 
+))
+
+opcao_org_exec <- c("TODOS", c(unique(tg$org_exec)))
+
+opcao_gnd <- c("TODOS", c(unique(tg$gnd)))
+
+
+```
+
+
+Selecione o período {.sidebar}
+=======================================================================
+
+
+
+```{r}
+sliderInput("ano_lan", label = h5("ano do lançamento"),
+                        min = min(tg$ano_lan), max = max(tg$ano_lan),
+                        value = c(min(tg$ano_lan), max = max(tg$ano_lan)),
+                        step = 1)
+```
+
+
+
+
+
+
+```{r}
+
+sliderInput("ano_emp", label = h5("ano do empenho"),
+                        min = min(tg$ano_emp), max = max(tg$ano_emp),
+                        value = c(min(tg$ano_emp), max = max(tg$ano_emp)),
+                        step = 1)
+            
+```
+
+
+
+```{r}
+
+selectInput("org_exec", label = h5("órgão executor"), 
+    choices = c("TODOS", unique(tg$org_exec)), 
+    selected = "TODOS")
+
+```
+
+
+
+
+```{r}
+
+selectInput("gnd", label = h5("grupo da despesa"), 
+    choices = c("TODOS" , unique(tg$gnd)), 
+    selected = "TODOS")
+
+```
+
+
+
+```{r}
+
+
+
+```
+
+
+
+Sequencial
+=======================================================================
+
+
+Column {data-width=650}
+-----------------------------------------------------------------------
+
+### Chart A
+
+```{r}
+
+
+ax <- list(
+  title = "",
+  showline = FALSE,
+  showgrid = FALSE
+)
+renderPlotly({
+  
+   if("TODOS" %in% input$org_exec)
+    filtro_org_exec = opcao_org_exec [-1]
+  else
+    filtro_org_execd = input$org_exec
+  
+ 
+  
+     if("TODOS" %in% input$gnd)
+    filtro_gnd = opcao_gnd [-1]
+  else
+    filtro_gnd = input$gnd
+  
+  
+  tg_fase<-tg %>%
+  filter( fase != "RP pago",
+          ano_emp >=  min(input$ano_emp) & ano_lan <=  max(input$ano_emp),
+          org_exec == filtro_org_exec,
+          gnd == filtro_gnd )%>%
+  group_by(fase, ano_lan)%>%
+  summarise(valor = sum(saldo)/1000000000)  
+  
+tg_fase_p<- tg_fase %>%
+  filter( ano_lan >=  min(input$ano_lan) & ano_lan <=  max(input$ano_lan))
+  
+  
+
+p_loa <- ggplot(tg_fase_p, aes(fill= fase, y=valor, x=ano_lan)) + 
+    geom_col(position="dodge", stat="identity")+
+  scale_fill_manual( values = c("empenhado" = "#5c85d6", "liquidado" = "#1a66ff", "pago" = "#000066", "RP pago" = "#ff0000"))
+
+
+
+(p_loa<-ggplotly(p_loa))%>%
+  layout(xaxis = ax, yaxis = ax)
+
+})
+```
+
+Column {data-width=350}
+-----------------------------------------------------------------------
+
+### Chart B
+
+```{r}
+renderText({
+  zz<- (input$org_exec)
+  zz
+
+ 
+ 
+   
+  
+ 
+})
+```
+
+### Chart C
+
+```{r}
+
+
+
+```
