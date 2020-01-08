@@ -20,7 +20,7 @@ library(DT)
 library(flexdashboard)
 library(knitr)
 library(shiny)
-
+library(shinyWidgets)
 options(scipen=999)
 options(digits = 2)
 
@@ -83,11 +83,26 @@ sliderInput("ano_emp", label = h5("ano do empenho"),
 
 
 
+
+
 ```{r}
 
-selectInput("org_exec", label = h5("órgão executor"), 
-    choices = c("TODOS", unique(tg$org_exec)), 
-    selected = "TODOS")
+pickerInput(
+  inputId = "org_exec", 
+  label = "Select/deselect all + format selected", 
+  choices = unique(tg$org_exec),
+  selected = tg$org_exec,
+   options = pickerOptions(
+    actionsBox = TRUE, 
+    selectedTextFormat = "count > 3",
+    deselectAllText = "nenhuma",
+    selectAllText = "todas",
+    liveSearch = TRUE
+  ), 
+  multiple = TRUE
+)
+
+#[https://rdrr.io/cran/shinyWidgets/man/pickerOptions.html]
 
 ```
 
@@ -95,21 +110,22 @@ selectInput("org_exec", label = h5("órgão executor"),
 
 
 ```{r}
-
-selectInput("gnd", label = h5("grupo da despesa"), 
-    choices = c("TODOS" , unique(tg$gnd)), 
-    selected = "TODOS")
-
+pickerInput(
+  inputId = "gnd", 
+  label = "Select/deselect all + format selected", 
+  choices = unique(tg$gnd), 
+  selected = tg$gnd,
+  
+  options = pickerOptions(
+    actionsBox = TRUE, 
+    selectedTextFormat = "count > 3",
+    deselectAllText = "nenhuma",
+    selectAllText = "todas"
+  ),
+  
+  multiple = TRUE
+)
 ```
-
-
-
-```{r}
-
-
-
-```
-
 
 
 Sequencial
@@ -130,25 +146,14 @@ ax <- list(
   showgrid = FALSE
 )
 renderPlotly({
-  
-   if("TODOS" %in% input$org_exec)
-    filtro_org_exec = opcao_org_exec [-1]
-  else
-    filtro_org_execd = input$org_exec
-  
  
-  
-     if("TODOS" %in% input$gnd)
-    filtro_gnd = opcao_gnd [-1]
-  else
-    filtro_gnd = input$gnd
-  
+ 
   
   tg_fase<-tg %>%
   filter( fase != "RP pago",
           ano_emp >=  min(input$ano_emp) & ano_lan <=  max(input$ano_emp),
-          org_exec == filtro_org_exec,
-          gnd == filtro_gnd )%>%
+          org_exec %in% input$org_exec,
+          gnd %in% input$gnd )%>%
   group_by(fase, ano_lan)%>%
   summarise(valor = sum(saldo)/1000000000)  
   
