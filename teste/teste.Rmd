@@ -5,8 +5,9 @@ output:
     orientation: rows
     vertical_layout: fill
     social: ["twitter", "facebook", "menu"]
-    runtime: shiny
+    #runtime: shiny
     
+runtime: shiny
 ---
 
 ```{r setup, include=FALSE}
@@ -47,10 +48,74 @@ tg<- tg%>%
  
 ))
 
-opcao_org_exec <- c("TODOS", c(unique(tg$org_exec)))
 
-opcao_gnd <- c("TODOS", c(unique(tg$gnd)))
 
+tg<- tg%>%
+ mutate(gnd = case_when(
+ gnd == "AMORTIZACAO/REFINANCIAMENTO DA DIVIDA" ~ "amortização da dívida",
+ gnd == "INVERSOES FINANCEIRAS" ~ "inversões financeiras",
+ gnd == "INVESTIMENTOS" ~ "investimentos",
+ gnd == "JUROS E ENCARGOS DA DIVIDA" ~ "juros da dívida",
+ gnd == "OUTRAS DESPESAS CORRENTES" ~ "outras despesas correntes",
+ gnd == "PESSOAL E ENCARGOS SOCIAIS" ~ "pessoal e encargos sociais"
+ 
+))
+
+
+
+tg<- tg %>%
+  mutate (org_exec_nome = case_when (
+org_exec == "ADVOCACIA-GERAL DA UNIAO" ~ "Advocacia Geral da União",
+org_exec == "CAMARA DOS DEPUTADOS" ~ "Câmara dos Deputados",
+org_exec == "CONSELHO NACIONAL DE JUSTICA" ~ "CNJ",
+org_exec == "CONSELHO NACIONAL DO MINISTERIO PUBLICO" ~ "CNMP",
+org_exec == "CONTROLADORIA-GERAL DA UNIAO" ~ "CGU",
+org_exec == "DEFENSORIA PUBLICA DA UNIAO" ~ "DPU",
+org_exec == "JUSTICA DO DISTRITO FEDERAL E DOS TERRITORIOS" ~ "JDFT",
+org_exec == "JUSTICA DO TRABALHO" ~ "Justiça do Trabalho",
+org_exec == "JUSTICA ELEITORAL" ~ "Justiça Eleitorial",
+org_exec == "JUSTICA FEDERAL" ~ "Justiça Federal",
+org_exec == "JUSTICA MILITAR" ~ "Justiça Militar",
+org_exec == "M.DAS MULH.,DA IG.RACIAL DA JUVENT.E DIR.HUM." ~ "Ministério das Mulheres",
+org_exec == "MINIST. DA AGRICUL.,PECUARIA E ABASTECIMENTO" ~ "Ministério da Agricultura",
+org_exec == "MINIST. DA INDUSTRIA, COM.EXTERIOR E SERVICOS" ~ "Ministério da Indústria",
+org_exec == "MINIST. DO PLANEJAMENTO, DESENVOLV. E GESTAO" ~ "Ministério da Planejamento",
+org_exec == "MINIST. MULHER, FAMILIA E DIREITOS HUMANOS" ~ "Ministério da Mulher.",
+org_exec == "MINIST.DA CIENCIA,TECNOL.,INOV.E COMUNICACOES" ~ "Ministério da Ciência",
+org_exec == "MINISTERIO DA CIDADANIA" ~ "Ministério da Cidadania",
+org_exec == "MINISTERIO DA CULTURA" ~ "Ministério da Cultural",
+org_exec == "MINISTERIO DA DEFESA" ~ "Ministério da Defesa",
+org_exec == "MINISTERIO DA ECONOMIA" ~ "Ministério da Economia",
+org_exec == "MINISTERIO DA EDUCACAO" ~ "Ministério da Educação",
+org_exec == "MINISTERIO DA INFRAESTRUTURA" ~ "Ministério da Infraestrutura",
+org_exec == "MINISTERIO DA JUSTICA E SEGURANCA PUBLICA" ~ "Ministério da Justiça",
+org_exec == "MINISTERIO DA PESCA E AQUICULTURA" ~ "Ministério da Pesca",
+org_exec == "MINISTERIO DA PREVIDENCIA SOCIAL" ~ "MPS",
+org_exec == "MINISTERIO DA SAUDE" ~ "Ministério da Saúde",
+org_exec == "MINISTERIO DA SEGURANCA PUBLICA" ~ "Ministério da Segurança",
+org_exec == "MINISTERIO DAS CIDADES" ~ "Ministério das Cidades",
+org_exec == "MINISTERIO DAS COMUNICACOES" ~ "Ministério das Comunicações",
+org_exec == "MINISTERIO DAS RELACOES EXTERIORES" ~ "MRE",
+org_exec == "MINISTERIO DE MINAS E ENERGIA" ~ "Ministério de Minas e Energia",
+org_exec == "MINISTERIO DO DESENVOLVIMENTO AGRARIO" ~ "MDA",
+org_exec == "MINISTERIO DO DESENVOLVIMENTO REGIONAL" ~ "MDR",
+org_exec == "MINISTERIO DO ESPORTE" ~ "Ministério do Esporte",
+org_exec == "MINISTERIO DO MEIO AMBIENTE" ~ "Ministério do Meio Ambiente",
+org_exec == "MINISTERIO DO TRABALHO" ~ "Ministério do Trabalho",
+org_exec == "MINISTERIO DO TRABALHO E EMPREGO" ~ "MTE",
+org_exec == "MINISTERIO DO TURISMO" ~ "Ministério do Turismo",
+org_exec == "MINISTERIO PUBLICO DA UNIAO" ~ "MPU",
+org_exec == "PRESIDENCIA DA REPUBLICA" ~ "Presidência",
+org_exec == "SENADO FEDERAL" ~ "Senado Federal",
+org_exec == "SUPERIOR TRIBUNAL DE JUSTICA" ~ "STJ",
+org_exec == "SUPREMO TRIBUNAL FEDERAL" ~ "STF",
+org_exec == "TRIBUNAL DE CONTAS DA UNIAO" ~ "TCU"
+
+
+  ))
+
+
+colnames(tg)<- c("fase","fase_cod", "gnd_cod","gnd" , "ano_lan", "ano_emp", "org_uo_cod", "org_uo", "org_exec_cod", "org_exec", "saldo", "org_exec_nome" )
 
 ```
 
@@ -88,12 +153,12 @@ sliderInput("ano_emp", label = h5("ano do empenho"),
 ```{r}
 
 pickerInput(
-  inputId = "org_exec", 
+  inputId = "org_exec_nome", 
   label = "Select/deselect all + format selected", 
-  choices = unique(tg$org_exec),
-  selected = tg$org_exec,
+  choices = unique(tg$org_exec_nome),
+  selected = tg$org_exec_nome,
    options = pickerOptions(
-    actionsBox = TRUE, 
+    actionsBox = TRUE,
     selectedTextFormat = "count > 3",
     deselectAllText = "nenhuma",
     selectAllText = "todas",
@@ -152,7 +217,7 @@ renderPlotly({
   tg_fase<-tg %>%
   filter( fase != "RP pago",
           ano_emp >=  min(input$ano_emp) & ano_lan <=  max(input$ano_emp),
-          org_exec %in% input$org_exec,
+          org_exec_nome %in% input$org_exec_nome,
           gnd %in% input$gnd )%>%
   group_by(fase, ano_lan)%>%
   summarise(valor = sum(saldo)/1000000000)  
