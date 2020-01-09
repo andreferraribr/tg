@@ -22,8 +22,9 @@ library(flexdashboard)
 library(knitr)
 library(shiny)
 library(shinyWidgets)
+library(lubridate)
 options(scipen=999)
-options(digits = 2)
+
 
 ```
 
@@ -32,12 +33,18 @@ options(digits = 2)
 ```{r}
 tg <- read_excel ("tg.xlsx")
 
+# alterar os nomes das colunas
+
 colnames(tg)<- c("fase","fase_cod", "gnd_cod","gnd" , "ano_lan", "ano_emp", "org_uo_cod", "org_uo", "org_exec_cod", "org_exec", "saldo" )
+
+# excluir registro com problema
 
 tg<- tg%>% filter (ano_emp != "'-7" & org_uo_cod != "'-7" & ano_emp != "'-9")
 
-tg$ano_lan<- as.numeric(tg$ano_lan)
-tg$ano_emp<- as.numeric(tg$ano_emp)
+tg$ano_lan<- as.integer(tg$ano_lan)
+tg$ano_emp<- as.integer(tg$ano_emp)
+
+# alterar nome das fases da execução da despesa
 
 tg<- tg%>%
  mutate(fase = case_when(
@@ -49,7 +56,7 @@ tg<- tg%>%
 ))
 
 
-
+# alterar dos grupos da despesa
 tg<- tg%>%
  mutate(gnd = case_when(
  gnd == "AMORTIZACAO/REFINANCIAMENTO DA DIVIDA" ~ "amortização da dívida",
@@ -62,7 +69,7 @@ tg<- tg%>%
 ))
 
 
-
+#incluir apelido para órgãos máximos executores
 tg<- tg %>%
   mutate (org_exec_nome = case_when (
 org_exec == "ADVOCACIA-GERAL DA UNIAO" ~ "Advocacia Geral da União",
@@ -117,6 +124,13 @@ org_exec == "TRIBUNAL DE CONTAS DA UNIAO" ~ "TCU"
 
 colnames(tg)<- c("fase","fase_cod", "gnd_cod","gnd" , "ano_lan", "ano_emp", "org_uo_cod", "org_uo", "org_exec_cod", "org_exec", "saldo", "org_exec_nome" )
 
+# cria variável data
+tg<- tg %>% mutate (ano_lan_2 = ymd(str_c (tg$ano_lan,"/12","/31")))
+
+# https://blog.exploratory.io/5-most-practically-useful-operations-when-working-with-date-and-time-in-r-9f9eb8a17465
+
+colnames(tg)<- c("fase","fase_cod", "gnd_cod","gnd" , "ano_lan", "ano_emp", "org_uo_cod", "org_uo", "org_exec_cod", "org_exec", "saldo", "org_exec_nome", "ano_lan_2" )
+
 ```
 
 
@@ -126,10 +140,13 @@ Selecione o período {.sidebar}
 
 
 ```{r}
+
+# filtrar período do lançamento
 sliderInput("ano_lan", label = h5("ano do lançamento"),
                         min = min(tg$ano_lan), max = max(tg$ano_lan),
                         value = c(min(tg$ano_lan), max = max(tg$ano_lan)),
-                        step = 1)
+                        step = 1,
+                        round = TRUE)
 ```
 
 
@@ -138,7 +155,7 @@ sliderInput("ano_lan", label = h5("ano do lançamento"),
 
 
 ```{r}
-
+#filtrar período do empenho
 sliderInput("ano_emp", label = h5("ano do empenho"),
                         min = min(tg$ano_emp), max = max(tg$ano_emp),
                         value = c(min(tg$ano_emp), max = max(tg$ano_emp)),
@@ -151,12 +168,13 @@ sliderInput("ano_emp", label = h5("ano do empenho"),
 
 
 ```{r}
+# selecionar órgão
 
 pickerInput(
-  inputId = "org_exec_nome", 
+  inputId = "org_exec", 
   label = "Select/deselect all + format selected", 
-  choices = unique(tg$org_exec_nome),
-  selected = tg$org_exec_nome,
+  choices = unique(tg$org_exec),
+  selected = tg$org_exec,
    options = pickerOptions(
     actionsBox = TRUE,
     selectedTextFormat = "count > 3",
@@ -175,6 +193,8 @@ pickerInput(
 
 
 ```{r}
+
+# selecionar gnd
 pickerInput(
   inputId = "gnd", 
   label = "Select/deselect all + format selected", 
@@ -205,20 +225,19 @@ Column {data-width=650}
 ```{r}
 
 
-ax <- list(
-  title = "",
-  showline = FALSE,
-  showgrid = FALSE
-)
+
 renderPlotly({
  
+  # criar tabela para totalizar os valores por fase e ano lançamento
+  # tabela tg_total é usada para imprimir o contorno das fases
   tg_total<-tg %>%
   filter( fase != "RP pago",
           ano_emp >=  min(input$ano_emp) & ano_lan <=  max(input$ano_emp),
            ano_lan >=  min(input$ano_lan) & ano_lan <=  max(input$ano_lan))%>%
-  group_by(fase, ano_lan)%>%
-    summarise(valor = sum(saldo)/1000000000) 
-  
+  group_by(fase, ano_lan_2)%>%
+   # transformar para bilhão
+     summarise(valor = round(sum(saldo)/1000000000) ,2)
+ # incluir texto "_total" na fase para evitar conflito no scale_fill_manual 
  tg_total <- tg_total %>%
  mutate(fase_t = case_when(
  fase == "empenhado" ~ "empenhado_total",
@@ -228,36 +247,106 @@ renderPlotly({
  TRUE ~ "outro"
  
 ))
-  
+# criar tabela tg_fases controlada pelos filtros de órgão e gnd.
+#  valores da tabela tg_fases são usados para preencher a tabela tg_total
   tg_fase<-tg %>%
   filter( fase != "RP pago",
           ano_emp >=  min(input$ano_emp) & ano_lan <=  max(input$ano_emp),
-          org_exec_nome %in% input$org_exec_nome,
-          gnd %in% input$gnd )%>%
-  group_by(fase, ano_lan)%>%
-  summarise(valor = sum(saldo)/1000000000)  
+          org_exec %in% input$org_exec,
+          gnd %in% input$gnd,
+          ano_lan >=  min(input$ano_lan) & ano_lan <=  max(input$ano_lan))%>%
+  group_by(fase, ano_lan_2)%>%
+  summarise(valor = round(sum(saldo)/1000000000),2)  
   
-tg_fase_p<- tg_fase %>%
-  filter( ano_lan >=  min(input$ano_lan) & ano_lan <=  max(input$ano_lan))
-  
-  
+
 
 
 p_loa <- ggplot() + 
-  geom_col(data = tg_total, aes( fill = fase_t, y=valor, x=ano_lan), alpha = 0.99, color = "gray", position="dodge", stat="identity")+
-  scale_fill_manual( values = c("empenhado_total" = "#FFFFFF", "liquidado_total" = "#FFFFFF", "pago_total" = "#FFFFFF", "empenhado" = "#5c85d6", "liquidado" = "#1a66ff", "pago" = "#000066"  ))+
-  
-   geom_col(data = tg_fase_p, aes(fill= fase, y=valor, x=ano_lan), position="dodge", stat="identity")
+  # imprime o contorno
+  geom_col(data = tg_total, aes( fill = fase_t, y=valor, x=ano_lan_2), alpha = 0.99, color = "gray", position="dodge")+
+  # imprime o preenchimento
+  geom_col(data = tg_fase, aes(fill= fase, y=valor, x=ano_lan_2), position="dodge")+
+  # define as cores
+   scale_fill_manual( values = c("empenhado_total" = "#FFFFFF", "liquidado_total" = "#FFFFFF", "pago_total" = "#FFFFFF", "empenhado" = "#5c85d6", "liquidado" = "#1a66ff", "pago" = "#000066"  ))
+
+#[https://community.plot.ly/t/how-to-make-the-messy-date-ticks-organized/7477/3]
+#https://help.plot.ly/date-format-and-time-series/
+p_loa<-ggplotly(p_loa) %>%
+  layout(showlegend = FALSE)%>%
+  layout(xaxis = list( tickformat = "%y",
+                       title = "", showline = FALSE, showgrid = FALSE ),
+         yaxis = list ( title = "", showline = FALSE, showgrid = FALSE ))
+p_loa
+})
+```
+
+
+
+row
+-----------------------------------------------------------------------
+
+
+
+### Chart A
+
+```{r}
+
+
+
+renderPlotly({
  
-   
+  # criar tabela para totalizar os valores por fase e ano lançamento
+  # tabela tg_total é usada para imprimir o contorno das fases
+  tg_total<-tg %>%
+  filter( fase != "RP pago",
+          ano_emp >=  min(input$ano_emp) & ano_lan <=  max(input$ano_emp),
+           ano_lan >=  min(input$ano_lan) & ano_lan <=  max(input$ano_lan))%>%
+  group_by(fase, ano_lan)%>%
+   # transformar para bilhão
+     summarise(valor = sum(saldo)/1000000000)
+ # incluir texto "_total" na fase para evitar conflito no scale_fill_manual 
+ tg_total <- tg_total %>%
+ mutate(fase_t = case_when(
+ fase == "empenhado" ~ "empenhado_total",
+ fase == "liquidado" ~ "liquidado_total",
+ fase == "pago" ~ "pago_total",
+ fase == "RP pago" ~ "RP pago_total",
+ TRUE ~ "outro"
+ 
+))
+# criar tabela tg_fases controlada pelos filtros de órgão e gnd.
+#  valores da tabela tg_fases são usados para preencher a tabela tg_total
+  tg_fase<-tg %>%
+  filter( fase != "RP pago",
+          ano_emp >=  min(input$ano_emp) & ano_lan <=  max(input$ano_emp),
+          org_exec %in% input$org_exec,
+          gnd %in% input$gnd,
+          ano_lan >=  min(input$ano_lan) & ano_lan <=  max(input$ano_lan))%>%
+  group_by(fase, ano_lan)%>%
+  summarise(valor = sum(saldo)/1000000000)  
+  
 
 
 
-(p_loa<-ggplotly(p_loa))%>%
-  layout(xaxis = ax, yaxis = ax)
+p_loa <- ggplot() + 
+ 
+  # imprime o preenchimento
+  geom_col(data = tg_fase, aes(fill= fase, y=valor, x=ano_lan), position="dodge")+
+  # define as cores
+   scale_fill_manual( values = c("empenhado_total" = "#FFFFFF", "liquidado_total" = "#FFFFFF", "pago_total" = "#FFFFFF", "empenhado" = "#5c85d6", "liquidado" = "#1a66ff", "pago" = "#000066"  ))
+
+
+
+(p_loa<-ggplotly(p_loa)) %>%
+  layout(showlegend = FALSE)%>%
+  layout(xaxis = list( title = "", showline = FALSE, showgrid = FALSE ),
+         yaxis = list ( title = "", showline = FALSE, showgrid = FALSE ))
 
 })
 ```
+
+
+
 
 Column {data-width=350}
 -----------------------------------------------------------------------
@@ -265,12 +354,56 @@ Column {data-width=350}
 ### Chart B
 
 ```{r}
-renderText({
-  zz<- (input$org_exec)
-  zz
+renderPlotly({
+ 
+ 
+  # criar tabela para totalizar os valores por fase e ano lançamento
+  # tabela tg_total é usada para imprimir o contorno das fases
+  tg_total<-tg %>%
+  filter( fase != "RP pago",
+          ano_emp >=  min(input$ano_emp) & ano_lan <=  max(input$ano_emp),
+           ano_lan >=  min(input$ano_lan) & ano_lan <=  max(input$ano_lan))%>%
+  group_by(fase, ano_lan)%>%
+   # transformar para bilhão
+     summarise(valor = sum(saldo)/1000000000)
+ # incluir texto "_total" na fase para evitar conflito no scale_fill_manual 
+ tg_total <- tg_total %>%
+ mutate(fase_t = case_when(
+ fase == "empenhado" ~ "empenhado_total",
+ fase == "liquidado" ~ "liquidado_total",
+ fase == "pago" ~ "pago_total",
+ fase == "RP pago" ~ "RP pago_total",
+ TRUE ~ "outro"
+ 
+))
+# criar tabela tg_fases controlada pelos filtros de órgão e gnd.
+#  valores da tabela tg_fases são usados para preencher a tabela tg_total
+  tg_fase<-tg %>%
+  filter( fase != "RP pago",
+          ano_emp >=  min(input$ano_emp) & ano_lan <=  max(input$ano_emp),
+          org_exec %in% input$org_exec,
+          gnd %in% input$gnd,
+          ano_lan >=  min(input$ano_lan) & ano_lan <=  max(input$ano_lan))%>%
+  group_by(fase, ano_lan)%>%
+  summarise(valor = sum(saldo)/1000000000)  
 
- 
- 
+
+
+p_emp <- ggplot() + 
+  # imprime linha média
+  geom_line(data = tg_total, aes( y= mean(valor), x=ano_lan), alpha = 0.99, color = "gray", position="dodge")+
+  # imprime o preenchimento
+  geom_col(data = tg_fase, aes(fill= fase, y=valor, x=ano_lan), position="dodge")+
+  # define as cores
+   scale_fill_manual( values = c("empenhado_total" = "#FFFFFF", "liquidado_total" = "#FFFFFF", "pago_total" = "#FFFFFF", "empenhado" = "#5c85d6", "liquidado" = "#1a66ff", "pago" = "#000066"  ))
+
+
+
+(p_emp<-ggplotly(p_emp)) %>%
+  layout(showlegend = FALSE)%>%
+  layout(xaxis = list( title = "", showline = FALSE, showgrid = FALSE ),
+         yaxis = list ( title = "", showline = FALSE, showgrid = FALSE ))
+
    
   
  
