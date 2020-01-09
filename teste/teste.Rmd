@@ -5,9 +5,9 @@ output:
     orientation: rows
     vertical_layout: fill
     social: ["twitter", "facebook", "menu"]
-    #runtime: shiny
+    runtime: shiny
     
-runtime: shiny
+
 ---
 
 ```{r setup, include=FALSE}
@@ -212,7 +212,22 @@ ax <- list(
 )
 renderPlotly({
  
+  tg_total<-tg %>%
+  filter( fase != "RP pago",
+          ano_emp >=  min(input$ano_emp) & ano_lan <=  max(input$ano_emp),
+           ano_lan >=  min(input$ano_lan) & ano_lan <=  max(input$ano_lan))%>%
+  group_by(fase, ano_lan)%>%
+    summarise(valor = sum(saldo)/1000000000) 
+  
+ tg_total <- tg_total %>%
+ mutate(fase_t = case_when(
+ fase == "empenhado" ~ "empenhado_total",
+ fase == "liquidado" ~ "liquidado_total",
+ fase == "pago" ~ "pago_total",
+ fase == "RP pago" ~ "RP pago_total",
+ TRUE ~ "outro"
  
+))
   
   tg_fase<-tg %>%
   filter( fase != "RP pago",
@@ -227,9 +242,14 @@ tg_fase_p<- tg_fase %>%
   
   
 
-p_loa <- ggplot(tg_fase_p, aes(fill= fase, y=valor, x=ano_lan)) + 
-    geom_col(position="dodge", stat="identity")+
-  scale_fill_manual( values = c("empenhado" = "#5c85d6", "liquidado" = "#1a66ff", "pago" = "#000066", "RP pago" = "#ff0000"))
+
+p_loa <- ggplot() + 
+  geom_col(data = tg_total, aes( fill = fase_t, y=valor, x=ano_lan), alpha = 0.99, color = "gray", position="dodge", stat="identity")+
+  scale_fill_manual( values = c("empenhado_total" = "#FFFFFF", "liquidado_total" = "#FFFFFF", "pago_total" = "#FFFFFF", "empenhado" = "#5c85d6", "liquidado" = "#1a66ff", "pago" = "#000066"  ))+
+  
+   geom_col(data = tg_fase_p, aes(fill= fase, y=valor, x=ano_lan), position="dodge", stat="identity")
+ 
+   
 
 
 
