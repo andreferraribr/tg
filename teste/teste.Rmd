@@ -161,7 +161,7 @@ tg_item<- full_join(tg_emp,tg_pago, by = "chave")%>%
 
 # https://blog.exploratory.io/5-most-practically-useful-operations-when-working-with-date-and-time-in-r-9f9eb8a17465
 
-colnames(tg)<- c("fase","fase_cod", "gnd_cod","gnd" , "ano_lan", "ano_emp", "org_uo_cod", "org_uo", "org_exec_cod", "org_exec", "saldo", "org_exec_nome", "chave" )
+
 
 ```
 
@@ -205,7 +205,7 @@ sliderInput("ano_emp", label = h5("ano do empenho"),
 
 pickerInput(
   inputId = "org_exec", 
-  label = "Select/deselect all + format selected", 
+  label = "selecione o órgão", 
   choices = unique(tg$org_exec),
   selected = tg$org_exec,
    options = pickerOptions(
@@ -222,19 +222,6 @@ pickerInput(
 
 ```
 
-```{r}
-pickerInput(
-  inputId = "gnd2",
-  label = "grupo da despesa",
-  choices = unique(tg$gnd),
-  selected = unique(tg$gnd),
-  multiple = TRUE,
-  choicesOpt = NULL,
-  width = NULL,
-  inline = FALSE
-)
-```
-
 
 
 ```{r}
@@ -242,7 +229,7 @@ pickerInput(
 # selecionar gnd
 pickerInput(
   inputId = "gnd", 
-  label = "Select/deselect all + format selected", 
+  label = "selecione a gnd", 
   choices = unique(tg$gnd), 
   selected = tg$gnd,
   
@@ -265,7 +252,7 @@ Sequencial
 Column {data-width=650}
 -----------------------------------------------------------------------
 
-### Chart A
+### Visão Geral
 
 ```{r}
 
@@ -332,7 +319,7 @@ row
 
 
 
-### Chart A
+### Itens selecionados
 
 ```{r}
 
@@ -389,23 +376,5 @@ p_loa <- ggplot() +
          yaxis = list ( title = "", showline = FALSE, showgrid = FALSE ))
 
 })
-```
-
-
-row
------------------------------------------------------------------------
-
-#### Tabela
-
-```{r}
-
-renderDT({
-  
-
-
-datatable(tg_item%>%  select(ano_lan,org_exec, org_uo, gnd, emp_n_pago, per_emp_n_pago),
-          filter = 'top', options = list(  pageLength = 5, autoWidth = TRUE, style = "default")) %>% formatCurrency("emp_n_pago", 'R$', digits = 2)%>% formatPercentage('per_emp_n_pago', 2)
-})
-
 ```
 
