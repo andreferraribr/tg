@@ -23,6 +23,8 @@ library(knitr)
 library(shiny)
 library(shinyWidgets)
 library(lubridate)
+library(tidyverse)
+
 options(scipen=999)
 
 
@@ -51,7 +53,7 @@ tg<- tg%>%
  fase == "DESPESAS EMPENHADAS (CONTROLE EMPENHO)" ~ "empenhado",
  fase == "DESPESAS LIQUIDADAS (CONTROLE EMPENHO)" ~ "liquidado",
  fase == "DESPESAS PAGAS (CONTROLE EMPENHO)" ~ "pago",
- fase == "RESTOS A PAGAR PAGOS (PROC E N PROC)" ~ "RP pago"
+ fase == "RESTOS A PAGAR PAGOS (PROC E N PROC)" ~ "RP_pago"
  
 ))
 
@@ -125,11 +127,41 @@ org_exec == "TRIBUNAL DE CONTAS DA UNIAO" ~ "TCU"
 colnames(tg)<- c("fase","fase_cod", "gnd_cod","gnd" , "ano_lan", "ano_emp", "org_uo_cod", "org_uo", "org_exec_cod", "org_exec", "saldo", "org_exec_nome" )
 
 # cria variável data
-tg<- tg %>% mutate (ano_lan_2 = ymd(str_c (tg$ano_lan,"/12","/31")))
+tg<- tg %>% 
+  mutate (ano_lan = ymd(str_c (tg$ano_lan,"/01","/01")))%>% 
+  mutate (ano_emp = ymd(str_c (tg$ano_emp,"/01","/01")))%>%
+  mutate(chave = (str_c (tg$gnd_cod,tg$ano_lan, tg$ano_emp, tg$org_uo_cod, tg$org_exec_cod)))
+
+
+colnames(tg)<- c("fase","fase_cod", "gnd_cod","gnd" , "ano_lan", "ano_emp", "org_uo_cod", "org_uo", "org_exec_cod", "org_exec", "saldo", "org_exec_nome", "chave" )
+
+
+tg_emp<- tg%>%
+  filter(fase == "empenhado")
+
+tg_pago<- tg%>%
+  filter(fase == "pago")%>%
+  select(chave, saldo)
+
+
+
+ tg_rp<- tg%>%
+  filter(fase == "RP_pago")
+ 
+
+
+
+names(tg_pago)[names(tg_pago) == "saldo"] <- "pago"
+names(tg_emp)[names(tg_emp) == "saldo"] <- "empenhado"
+
+
+tg_item<- full_join(tg_emp,tg_pago, by = "chave")%>%
+  mutate (emp_n_pago = as.integer(empenhado - pago))%>%
+  mutate (per_emp_n_pago = (1-(pago/empenhado)))
 
 # https://blog.exploratory.io/5-most-practically-useful-operations-when-working-with-date-and-time-in-r-9f9eb8a17465
 
-colnames(tg)<- c("fase","fase_cod", "gnd_cod","gnd" , "ano_lan", "ano_emp", "org_uo_cod", "org_uo", "org_exec_cod", "org_exec", "saldo", "org_exec_nome", "ano_lan_2" )
+colnames(tg)<- c("fase","fase_cod", "gnd_cod","gnd" , "ano_lan", "ano_emp", "org_uo_cod", "org_uo", "org_exec_cod", "org_exec", "saldo", "org_exec_nome", "chave" )
 
 ```
 
@@ -146,7 +178,7 @@ sliderInput("ano_lan", label = h5("ano do lançamento"),
                         min = min(tg$ano_lan), max = max(tg$ano_lan),
                         value = c(min(tg$ano_lan), max = max(tg$ano_lan)),
                         step = 1,
-                        round = TRUE)
+                        timeFormat ="%Y")
 ```
 
 
@@ -159,7 +191,8 @@ sliderInput("ano_lan", label = h5("ano do lançamento"),
 sliderInput("ano_emp", label = h5("ano do empenho"),
                         min = min(tg$ano_emp), max = max(tg$ano_emp),
                         value = c(min(tg$ano_emp), max = max(tg$ano_emp)),
-                        step = 1)
+                        step = 1,
+                        timeFormat ="%Y")
             
 ```
 
@@ -189,6 +222,18 @@ pickerInput(
 
 ```
 
+```{r}
+pickerInput(
+  inputId = "gnd2",
+  label = "grupo da despesa",
+  choices = unique(tg$gnd),
+  selected = unique(tg$gnd),
+  multiple = TRUE,
+  choicesOpt = NULL,
+  width = NULL,
+  inline = FALSE
+)
+```
 
 
 
@@ -231,10 +276,10 @@ renderPlotly({
   # criar tabela para totalizar os valores por fase e ano lançamento
   # tabela tg_total é usada para imprimir o contorno das fases
   tg_total<-tg %>%
-  filter( fase != "RP pago",
+  filter( fase != "RP_pago",
           ano_emp >=  min(input$ano_emp) & ano_lan <=  max(input$ano_emp),
            ano_lan >=  min(input$ano_lan) & ano_lan <=  max(input$ano_lan))%>%
-  group_by(fase, ano_lan_2)%>%
+  group_by(fase, ano_lan)%>%
    # transformar para bilhão
      summarise(valor = round(sum(saldo)/1000000000) ,2)
  # incluir texto "_total" na fase para evitar conflito no scale_fill_manual 
@@ -243,19 +288,19 @@ renderPlotly({
  fase == "empenhado" ~ "empenhado_total",
  fase == "liquidado" ~ "liquidado_total",
  fase == "pago" ~ "pago_total",
- fase == "RP pago" ~ "RP pago_total",
+ fase == "RP_pago" ~ "RP pago_total",
  TRUE ~ "outro"
  
 ))
 # criar tabela tg_fases controlada pelos filtros de órgão e gnd.
 #  valores da tabela tg_fases são usados para preencher a tabela tg_total
   tg_fase<-tg %>%
-  filter( fase != "RP pago",
+  filter( fase != "RP_pago",
           ano_emp >=  min(input$ano_emp) & ano_lan <=  max(input$ano_emp),
           org_exec %in% input$org_exec,
           gnd %in% input$gnd,
           ano_lan >=  min(input$ano_lan) & ano_lan <=  max(input$ano_lan))%>%
-  group_by(fase, ano_lan_2)%>%
+  group_by(fase, ano_lan)%>%
   summarise(valor = round(sum(saldo)/1000000000),2)  
   
 
@@ -263,18 +308,18 @@ renderPlotly({
 
 p_loa <- ggplot() + 
   # imprime o contorno
-  geom_col(data = tg_total, aes( fill = fase_t, y=valor, x=ano_lan_2), alpha = 0.99, color = "gray", position="dodge")+
+  geom_col(data = tg_total, aes( fill = fase_t, y=valor, x=ano_lan), alpha = 0.99, color = "gray", position="dodge")+
   # imprime o preenchimento
-  geom_col(data = tg_fase, aes(fill= fase, y=valor, x=ano_lan_2), position="dodge")+
+  geom_col(data = tg_fase, aes(fill= fase, y=valor, x=ano_lan), position="dodge")+
   # define as cores
-   scale_fill_manual( values = c("empenhado_total" = "#FFFFFF", "liquidado_total" = "#FFFFFF", "pago_total" = "#FFFFFF", "empenhado" = "#5c85d6", "liquidado" = "#1a66ff", "pago" = "#000066"  ))
+   scale_fill_manual( values = c("empenhado_total" = "#FFFFFF", "liquidado_total" = "#FFFFFF", "pago_total" = "#FFFFFF", "empenhado" = "#5c85d6", "liquidado" = "#1a66ff", "pago" = "#000066"  ))+
+  scale_x_date( date_labels = "%Y")
 
 #[https://community.plot.ly/t/how-to-make-the-messy-date-ticks-organized/7477/3]
 #https://help.plot.ly/date-format-and-time-series/
 p_loa<-ggplotly(p_loa) %>%
   layout(showlegend = FALSE)%>%
-  layout(xaxis = list( tickformat = "%y",
-                       title = "", showline = FALSE, showgrid = FALSE ),
+  layout(xaxis = list( title = "", showline = FALSE, showgrid = FALSE ),
          yaxis = list ( title = "", showline = FALSE, showgrid = FALSE ))
 p_loa
 })
@@ -298,7 +343,7 @@ renderPlotly({
   # criar tabela para totalizar os valores por fase e ano lançamento
   # tabela tg_total é usada para imprimir o contorno das fases
   tg_total<-tg %>%
-  filter( fase != "RP pago",
+  filter( fase != "RP_pago",
           ano_emp >=  min(input$ano_emp) & ano_lan <=  max(input$ano_emp),
            ano_lan >=  min(input$ano_lan) & ano_lan <=  max(input$ano_lan))%>%
   group_by(fase, ano_lan)%>%
@@ -310,14 +355,14 @@ renderPlotly({
  fase == "empenhado" ~ "empenhado_total",
  fase == "liquidado" ~ "liquidado_total",
  fase == "pago" ~ "pago_total",
- fase == "RP pago" ~ "RP pago_total",
+ fase == "RP_pago" ~ "RP pago_total",
  TRUE ~ "outro"
  
 ))
 # criar tabela tg_fases controlada pelos filtros de órgão e gnd.
 #  valores da tabela tg_fases são usados para preencher a tabela tg_total
   tg_fase<-tg %>%
-  filter( fase != "RP pago",
+  filter( fase != "RP_pago",
           ano_emp >=  min(input$ano_emp) & ano_lan <=  max(input$ano_emp),
           org_exec %in% input$org_exec,
           gnd %in% input$gnd,
@@ -333,7 +378,8 @@ p_loa <- ggplot() +
   # imprime o preenchimento
   geom_col(data = tg_fase, aes(fill= fase, y=valor, x=ano_lan), position="dodge")+
   # define as cores
-   scale_fill_manual( values = c("empenhado_total" = "#FFFFFF", "liquidado_total" = "#FFFFFF", "pago_total" = "#FFFFFF", "empenhado" = "#5c85d6", "liquidado" = "#1a66ff", "pago" = "#000066"  ))
+   scale_fill_manual( values = c("empenhado_total" = "#FFFFFF", "liquidado_total" = "#FFFFFF", "pago_total" = "#FFFFFF", "empenhado" = "#5c85d6", "liquidado" = "#1a66ff", "pago" = "#000066"  ))+
+  scale_x_date( date_labels = "%Y")
 
 
 
@@ -346,74 +392,20 @@ p_loa <- ggplot() +
 ```
 
 
-
-
-Column {data-width=350}
+row
 -----------------------------------------------------------------------
 
-### Chart B
+#### Tabela
 
 ```{r}
-renderPlotly({
- 
- 
-  # criar tabela para totalizar os valores por fase e ano lançamento
-  # tabela tg_total é usada para imprimir o contorno das fases
-  tg_total<-tg %>%
-  filter( fase != "RP pago",
-          ano_emp >=  min(input$ano_emp) & ano_lan <=  max(input$ano_emp),
-           ano_lan >=  min(input$ano_lan) & ano_lan <=  max(input$ano_lan))%>%
-  group_by(fase, ano_lan)%>%
-   # transformar para bilhão
-     summarise(valor = sum(saldo)/1000000000)
- # incluir texto "_total" na fase para evitar conflito no scale_fill_manual 
- tg_total <- tg_total %>%
- mutate(fase_t = case_when(
- fase == "empenhado" ~ "empenhado_total",
- fase == "liquidado" ~ "liquidado_total",
- fase == "pago" ~ "pago_total",
- fase == "RP pago" ~ "RP pago_total",
- TRUE ~ "outro"
- 
-))
-# criar tabela tg_fases controlada pelos filtros de órgão e gnd.
-#  valores da tabela tg_fases são usados para preencher a tabela tg_total
-  tg_fase<-tg %>%
-  filter( fase != "RP pago",
-          ano_emp >=  min(input$ano_emp) & ano_lan <=  max(input$ano_emp),
-          org_exec %in% input$org_exec,
-          gnd %in% input$gnd,
-          ano_lan >=  min(input$ano_lan) & ano_lan <=  max(input$ano_lan))%>%
-  group_by(fase, ano_lan)%>%
-  summarise(valor = sum(saldo)/1000000000)  
 
-
-
-p_emp <- ggplot() + 
-  # imprime linha média
-  geom_line(data = tg_total, aes( y= mean(valor), x=ano_lan), alpha = 0.99, color = "gray", position="dodge")+
-  # imprime o preenchimento
-  geom_col(data = tg_fase, aes(fill= fase, y=valor, x=ano_lan), position="dodge")+
-  # define as cores
-   scale_fill_manual( values = c("empenhado_total" = "#FFFFFF", "liquidado_total" = "#FFFFFF", "pago_total" = "#FFFFFF", "empenhado" = "#5c85d6", "liquidado" = "#1a66ff", "pago" = "#000066"  ))
-
-
-
-(p_emp<-ggplotly(p_emp)) %>%
-  layout(showlegend = FALSE)%>%
-  layout(xaxis = list( title = "", showline = FALSE, showgrid = FALSE ),
-         yaxis = list ( title = "", showline = FALSE, showgrid = FALSE ))
-
-   
+renderDT({
   
- 
+
+
+datatable(tg_item%>%  select(ano_lan,org_exec, org_uo, gnd, emp_n_pago, per_emp_n_pago),
+          filter = 'top', options = list(  pageLength = 5, autoWidth = TRUE, style = "default")) %>% formatCurrency("emp_n_pago", 'R$', digits = 2)%>% formatPercentage('per_emp_n_pago', 2)
 })
-```
-
-### Chart C
-
-```{r}
-
-
 
 ```
+
